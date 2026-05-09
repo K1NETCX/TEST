@@ -1,0 +1,111 @@
+-- ==========================================
+-- TOXIC AURA - ONLY EXTERNAL VFX (CORRIGIDO)
+-- ==========================================
+
+local VisualSettings = { 
+    AuraEnabled = true,
+    AuraColor = Color3.fromRGB(255, 0, 0) -- Cor que será aplicada às partículas do asset
+} 
+
+-- Função para limpar a aura anterior
+local function RemoveToxicAura() 
+    local char = game.Players.LocalPlayer.Character
+    if char then
+        for _, part in ipairs(char:GetDescendants()) do
+            -- Remove anexos criados pelo script anterior ou pelo carregamento de VFX
+            if part:IsA("Attachment") and (part.Name:find("Aura") or part.Name == "K1N-ET1CAuraAttachment") then
+                part:Destroy()
+            end
+        end
+    end
+end 
+
+-- Função principal que carrega o Asset Externo
+local function LoadToxicAura()
+    if not VisualSettings.AuraEnabled then return end
+    
+    local assetId = 14628750884 
+    local player = game.Players.LocalPlayer 
+    local character = player.Character or player.CharacterAdded:Wait() 
+    local root = character:WaitForChild("HumanoidRootPart") 
+
+    RemoveToxicAura()
+
+    local function loadAndCopyVFX() 
+        -- Tenta baixar o objeto do catálogo do Roblox
+        local success, model = pcall(function() return game:GetObjects("rbxassetid://" .. assetId)[1] end) 
+        if not success or not model then 
+            warn("[Death Aura] Falha ao baixar Asset ID: " .. assetId)
+            return 
+        end 
+        
+        model.Parent = workspace 
+        -- Spawn temporário longe para processamento
+        local forwardPos = root.CFrame * CFrame.new(0, -3, -15) 
+        
+        if model:IsA("Model") then 
+            if model.PrimaryPart then 
+                model:SetPrimaryPartCFrame(forwardPos) 
+            else 
+                local base = model:FindFirstChildWhichIsA("BasePart", true) 
+                if base then model:MoveTo(forwardPos.Position) end 
+            end 
+        end 
+        
+        task.wait(1) -- Tempo para o Roblox processar o modelo no workspace
+        
+        local vfxFolder = workspace:FindFirstChild("VFX Auras") 
+        if not vfxFolder then model:Destroy() return end 
+        
+        local children = vfxFolder:GetChildren() 
+        local dummy = children[2] -- O asset específico usa o segundo filho do modelo carregado
+        
+        if not dummy or not dummy:IsA("Model") then model:Destroy() return end 
+        
+        local humanoid = character:WaitForChild("Humanoid") 
+        local isR15 = humanoid.RigType == Enum.HumanoidRigType.R15 
+        
+        -- Mapeamento das partes do corpo (R6 e R15)
+        local partMapping = { 
+            ["Head"] = "Head", 
+            ["Torso"] = isR15 and "UpperTorso" or "Torso", 
+            ["Left Arm"] = isR15 and "LeftUpperArm" or "Left Arm", 
+            ["Right Arm"] = isR15 and "RightUpperArm" or "Right Arm", 
+            ["Left Leg"] = isR15 and "LeftUpperLeg" or "Left Leg", 
+            ["Right Leg"] = isR15 and "RightUpperLeg" or "Right Leg", 
+        } 
+        
+        for sourceName, targetName in pairs(partMapping) do 
+            local sourcePart = dummy:FindFirstChild(sourceName, true) 
+            local targetPart = character:FindFirstChild(targetName, true) 
+            
+            if sourcePart and targetPart then 
+                for _, child in ipairs(sourcePart:GetChildren()) do 
+                    if child:IsA("Attachment") then 
+                        local clone = child:Clone()
+                        clone.Parent = targetPart 
+                        -- Aplica a cor definida nas configurações às partículas do Asset
+                        for _, particle in ipairs(clone:GetDescendants()) do
+                            if particle:IsA("ParticleEmitter") then
+                                particle.Color = ColorSequence.new(VisualSettings.AuraColor)
+                            end
+                        end
+                    end 
+                end 
+            end 
+        end
+        model:Destroy() -- Deleta o modelo original do workspace, sobrando apenas os clones no seu corpo
+        print("[K1N-ET1C] Toxic Aura aplicada com sucesso!")
+    end 
+    
+    task.spawn(loadAndCopyVFX) 
+end
+
+-- EXECUÇÃO INICIAL
+LoadToxicAura()
+
+-- RE-APLICAR QUANDO O JOGADOR RENASCER
+game.Players.LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1.5) -- Espera o corpo carregar totalmente
+    LoadToxicAura()
+end)
