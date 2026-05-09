@@ -1,0 +1,80 @@
+-- ==========================================
+-- BOUNCE ASSIST COMPLETO (Corrigido)
+-- ==========================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local BounceActive = true
+local horizontalMomentum = Vector3.new(0, 0, 0)
+
+-- ====================== TOGGLE (Tecla B) ======================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.B then
+        BounceActive = not BounceActive
+        print("[Bounce Assist] " .. (BounceActive and "✅ LIGADO" or "❌ DESLIGADO"))
+    end
+end)
+
+-- ====================== BOUNCE ASSIST ======================
+local bounceConnection
+
+local function StartBounceAssist()
+    if bounceConnection then bounceConnection:Disconnect() end
+
+    bounceConnection = RunService.Heartbeat:Connect(function()
+        if not BounceActive then return end
+
+        local character = LocalPlayer.Character
+        if not character then return end
+
+        local root = character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        if not root or not humanoid then return end
+
+        local currentVel = root.AssemblyLinearVelocity
+        local verticalVel = currentVel.Y
+        local state = humanoid:GetState()
+
+        -- Só ativa em queda ou pulo
+        if state == Enum.HumanoidStateType.Freefall or state == Enum.HumanoidStateType.Jumping then
+            
+            -- Salva momentum horizontal
+            horizontalMomentum = Vector3.new(currentVel.X, 0, currentVel.Z)
+
+            -- Raycast para baixo
+            local rayParams = RaycastParams.new()
+            rayParams.FilterDescendantsInstances = {character}
+            rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+            local hit = workspace:Raycast(root.Position, Vector3.new(0, -6, 0), rayParams)
+
+            if hit and verticalVel < -5 then
+                -- Detecta se é rampa (normal não é totalmente para cima)
+                if hit.Normal.Y < 0.95 then
+                    local bouncePower = math.abs(verticalVel) * 1.08  -- Ajuste fino (1.05 ~ 1.12)
+
+                    root.AssemblyLinearVelocity = horizontalMomentum + Vector3.new(0, bouncePower, 0)
+                    
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+
+                    -- Pequeno PlatformStand para melhor física
+                    task.spawn(function()
+                        humanoid.PlatformStand = true
+                        task.wait(0.08)
+                        humanoid.PlatformStand = false
+                    end)
+                end
+            end
+        end
+    end)
+end
+
+-- Inicia automaticamente
+StartBounceAssist()
+
+print("🚀 Bounce Assist carregado! Pressione **B** para ligar/desligar")
